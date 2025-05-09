@@ -1,23 +1,26 @@
-# IDE 配置文件
+# IDE configuration files
 phx-devbox.code-workspace
 .idea/
 .vscode/
 
-# 系統文件
+# System files
 .DS_Store
 Thumbs.db
 
-# 臨時文件
+# Temporary files
 *.log
 *.tmp
 tmp/
 
-# 編譯輸出
+# Compiled output
 _build/
 
-# 依賴目錄
+# Dependency directories
 deps/
 
-# 本地開發配置
+# Distribution files
+dist/
+
+# Local development configuration
 .env
 .env.local

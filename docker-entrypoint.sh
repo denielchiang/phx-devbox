@@ -1,32 +1,32 @@
 #!/bin/bash
 set -e
 
-echo "啟動 docker-entrypoint.sh..."
+echo "Starting docker-entrypoint.sh..."
 
-# 檢查是否提供了 Phoenix 版本
+# Check if Phoenix version is provided
 if [ -z "$PHOENIX_VERSION" ]; then
-  echo "警告：未指定 Phoenix 版本。如果需要使用 Phoenix，請通過 -v 選項指定版本。"
+  echo "Warning: Phoenix version not specified. If you need to use Phoenix, please specify the version using the -v option."
   HAS_PHOENIX=false
 else
   HAS_PHOENIX=true
 fi
 
-# 顯示已安裝的 Elixir 和 Erlang 版本
+# Display installed Elixir and Erlang versions
 elixir --version
 
-# 確保 Hex 和 Rebar 已安裝
-echo "確保 Hex 和 Rebar 已安裝..."
+# Ensure Hex and Rebar are installed
+echo "Ensuring Hex and Rebar are installed..."
 mix local.hex --force
 mix local.rebar --force
 
-# 只有在提供了 Phoenix 版本的情況下才安裝 Phoenix
+# Only install Phoenix if a version was provided
 if [ "$HAS_PHOENIX" = true ]; then
-  echo "安裝 Phoenix $PHOENIX_VERSION..."
-  # 檢查是否是不完整的 RC 版本號
+  echo "Installing Phoenix $PHOENIX_VERSION..."
+  # Check if it's an incomplete RC version number
   if [[ "$PHOENIX_VERSION" == *"-rc"* && ! "$PHOENIX_VERSION" == *"."* ]]; then
-    echo "警告: 使用不完整的 RC 版本號，嘗試使用 $PHOENIX_VERSION.3"
+    echo "Warning: Using incomplete RC version number, trying $PHOENIX_VERSION.3"
     PHOENIX_VERSION="$PHOENIX_VERSION.3"
-    echo "正在安裝修正後的版本: $PHOENIX_VERSION"
+    echo "Installing corrected version: $PHOENIX_VERSION"
   fi
   mix archive.install --force hex phx_new $PHOENIX_VERSION
 fi
