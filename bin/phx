@@ -161,6 +161,13 @@ fi
 # 獲取腳本的絕對路徑
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# 檢查是否為 Homebrew 安裝
+if [[ "$SCRIPT_DIR" == "/opt/homebrew/Cellar/phx"* ]] || [[ "$SCRIPT_DIR" == "/usr/local/Cellar/phx"* ]]; then
+    # Homebrew 安裝路徑
+    SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
+    echo "檢測到 Homebrew 安裝，使用配置路徑: $SCRIPT_DIR"
+fi
+
 # 檢查是否是創建新項目的命令
 if [[ "$1" == "new" ]]; then
     # 從參數中獲取應用名稱和其他選項

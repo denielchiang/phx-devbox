@@ -1,0 +1,23 @@
+# IDE 配置文件
+phx-devbox.code-workspace
+.idea/
+.vscode/
+
+# 系統文件
+.DS_Store
+Thumbs.db
+
+# 臨時文件
+*.log
+*.tmp
+tmp/
+
+# 編譯輸出
+_build/
+
+# 依賴目錄
+deps/
+
+# 本地開發配置
+.env
+.env.local
