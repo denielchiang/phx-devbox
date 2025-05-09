@@ -2,6 +2,7 @@
 phx-devbox.code-workspace
 .idea/
 .vscode/
+.windsurfrules
 
 # System files
 .DS_Store
