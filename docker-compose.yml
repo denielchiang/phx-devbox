@@ -4,32 +4,32 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - .:/app                  # 將當前目錄掛載到容器的/app目錄
-      - mix_deps:/app/deps      # 將依賴項存儲在命名卷中以提高性能
-      - build_cache:/app/_build # 將編譯緩存存儲在命名卷中以提高性能
-    # Mac 上不要使用 network_mode: host，因為它在 Mac 上的行為不同
+      - .:/app                  # Mount current directory to /app in container
+      - mix_deps:/app/deps      # Store dependencies in a named volume for better performance
+      - build_cache:/app/_build # Store build cache in a named volume for better performance
+    # Don't use network_mode: host on Mac, as it behaves differently
     ports:
-      - "4000:4000"  # 暴露 Phoenix 端口
+      - "4000:4000"  # Expose Phoenix port
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # 將 host.docker.internal 指向容器網關
+      - "host.docker.internal:host-gateway"  # Point host.docker.internal to container gateway
     dns:
       - 8.8.8.8   # Google DNS
       - 1.1.1.1   # Cloudflare DNS
     environment:
-      # 只保留 Phoenix 版本環境變數，因為 Erlang 和 Elixir 已在 Dockerfile 中指定
-      # 使用穩定版本的 Phoenix
+      # Only keep Phoenix version as environment variable, since Erlang and Elixir are specified in Dockerfile
+      # Use stable version of Phoenix
       - PHOENIX_VERSION=${PHOENIX_VERSION:-1.7.10}
-      - DATABASE_HOST=host.docker.internal  # 指向 Mac 主機
+      - DATABASE_HOST=host.docker.internal  # Point to Mac host
       - DATABASE_USER=${POSTGRES_USER:-postgres}
       - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - DATABASE_NAME=${POSTGRES_DB:-postgres}
-      # 確保文件修改能被檢測到
+      # Ensure file changes can be detected
       - WATCHDOG_ENABLED=true
     command: phx.server
     stdin_open: true
     tty: true
-    user: "${CURRENT_UID:-1000}:${CURRENT_GID:-1000}"  # 使用宿主機用戶的UID/GID
+    user: "${CURRENT_UID:-1000}:${CURRENT_GID:-1000}"  # Use host user's UID/GID
 
 volumes:
-  mix_deps:     # 緩存依賴項
-  build_cache:  # 緩存編譯結果
+  mix_deps:     # Cache dependencies
+  build_cache:  # Cache compilation results

@@ -2,116 +2,116 @@
 set -e
 
 ##########################################################
-# 函數定義部分 - 所有函數必須先定義再使用
+# Function Definitions - All functions must be defined before use
 ##########################################################
 
-# 顯示說明
+# Show help information
 show_help() {
-    echo "使用方法: ./phx.sh [選項] [命令]"
+    echo "Usage: phx [options] [commands]"
     echo ""
-    echo "選項:"
-    echo "  -v, --phx, --phoenix-version   指定 Phoenix 框架版本"
-    echo "  -e, --ex, --elixir-version    指定 Elixir 版本 (預設: 最新版本)"
-    echo "  -o, --erl, --erlang-version   指定 Erlang 版本 (預設: 最新版本)"
-    echo "  -p, --path                    指定專案創建的路徑"
-    echo "  -h, --help                    顯示此說明"
+    echo "Options:"
+    echo "  -v, --phx, --phoenix-version   Specify Phoenix framework version"
+    echo "  -e, --ex, --elixir-version    Specify Elixir version (default: latest)"
+    echo "  -o, --erl, --erlang-version   Specify Erlang version (default: latest)"
+    echo "  -p, --path                    Specify path for project creation"
+    echo "  -h, --help                    Show this help message"
     echo ""
-    echo "命令範例:"
-    echo "  ./phx.sh new my_app        # 創建新的 Phoenix 應用"
-    echo "  ./phx.sh new my_app --live # 創建新的 Phoenix LiveView 應用"
-    echo "  ./phx.sh --path /path/to/my_project new my_app  # 在指定路徑創建新應用"
-    echo "  ./phx.sh deps.get          # 獲取依賴"
-    echo "  ./phx.sh phx.server        # 啟動 Phoenix 服務器"
-    echo "  ./phx.sh iex               # 啟動 IEx shell"
-    echo "  ./phx.sh iex.phx           # 啟動 IEx 並加載 Phoenix 應用 (iex -S mix phx.server)"
-    echo "  ./phx.sh test               # 執行測試"
-    echo "  ./phx.sh ecto.create       # 創建資料庫"
-    echo "  ./phx.sh ecto.migrate      # 執行遷移"
-    echo "  ./phx.sh ecto.setup        # 初始化資料庫 (創建資料庫、載入預設資料)"
-    echo "  ./phx.sh ecto.reset        # 重置資料庫 (刪除並重新創建資料庫)"
-    echo "  ./phx.sh routes             # 顯示所有路由"
-    echo "  ./phx.sh bash               # 進入容器的 bash"
-    echo "  ./phx.sh update-versions    # 更新 .tool-versions 文件"
+    echo "Command examples:"
+    echo "  phx new my_app        # Create a new Phoenix application"
+    echo "  phx new my_app --live # Create a new Phoenix LiveView application"
+    echo "  phx --path /path/to/my_project new my_app  # Create a new application in a specific path"
+    echo "  phx deps.get          # Get dependencies"
+    echo "  phx phx.server        # Start Phoenix server"
+    echo "  phx iex               # Start IEx shell"
+    echo "  phx iex.phx           # Start IEx and load Phoenix application (iex -S mix phx.server)"
+    echo "  phx test               # Run tests"
+    echo "  phx ecto.create       # Create database"
+    echo "  phx ecto.migrate      # Run migrations"
+    echo "  phx ecto.setup        # Initialize database (create, load defaults)"
+    echo "  phx ecto.reset        # Reset database (drop and recreate)"
+    echo "  phx routes             # Show all routes"
+    echo "  phx bash               # Enter container's bash"
+    echo "  phx update-versions    # Update .tool-versions file"
     echo ""
-    echo "所有 mix 與 iex 命令都可以直接使用"
+    echo "All mix and iex commands can be used directly"
 }
 
-# 檢查 Docker Compose 和設置正確的命令
+# Check Docker Compose and set the correct command
 check_docker_compose() {
     local docker_compose_found=false
     
     if command -v docker-compose &> /dev/null; then
-        # 傳統的 docker-compose 命令
+        # Traditional docker-compose command
         docker_compose_cmd="docker-compose"
         docker_compose_found=true
     elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-        # 新的 docker compose 子命令
+        # New docker compose subcommand
         docker_compose_cmd="docker compose"
         docker_compose_found=true
     fi
     
     if [ "$docker_compose_found" = false ]; then
-        echo "錯誤：未發現 Docker Compose。請確保已安裝 Docker Desktop 或 Docker Engine 並包含 Docker Compose 功能。"
+        echo "Error: Docker Compose not found. Please make sure Docker Desktop or Docker Engine is installed with Docker Compose functionality."
         exit 1
     fi
     
-    # 檢查是否有權限執行 Docker
+    # Check if you have permission to run Docker
     if ! docker info &>/dev/null; then
-        echo "警告：無法連接到 Docker。請確保 Docker 已啟動，且您有權限執行 Docker 命令。"
-        echo "如果您不在 docker 群組中，可能需要執行："
+        echo "Warning: Unable to connect to Docker. Please make sure Docker is running and you have permission to execute Docker commands."
+        echo "If you are not in the docker group, you may need to run:"
         echo "  sudo usermod -aG docker $(whoami) && newgrp docker"
         exit 1
     fi
     
-    echo "使用 Docker Compose 命令: $docker_compose_cmd"
+    echo "Using Docker Compose command: $docker_compose_cmd"
 }
 
-# 獲取當前用戶的 UID 和 GID
+# Get current user's UID and GID
 setup_user_permissions() {
-    # 獲取用戶的 UID 和 GID
+    # Get user's UID and GID
     export CURRENT_UID=$(id -u)
     export CURRENT_GID=$(id -g)
     
-    echo "容器將使用用戶 ID: $CURRENT_UID 和組 ID: $CURRENT_GID"
+    echo "Container will use user ID: $CURRENT_UID and group ID: $CURRENT_GID"
 }
 
-# 更新 .tool-versions 文件
+# Update .tool-versions file
 update_tool_versions() {
-    # 使用固定版本而不是透過 asdf 獲取
+    # Use fixed versions instead of detecting through asdf
     local actual_erlang_version="27.3.3"
     local actual_elixir_version="1.18.3"
     local target_dir="${1:-$PROJECT_PATH}"
     
-    # 創建或更新 .tool-versions 文件
+    # Create or update .tool-versions file
     echo "erlang $actual_erlang_version" > "$target_dir/.tool-versions"
     echo "elixir $actual_elixir_version" >> "$target_dir/.tool-versions"
     
     if [[ -n "$PHOENIX_VERSION" ]]; then
-        echo "# Phoenix 版本: $PHOENIX_VERSION" >> "$target_dir/.tool-versions"
-        echo "# 注意: Phoenix 不是由 asdf 管理的，這只是為了記錄" >> "$target_dir/.tool-versions"
+        echo "# Phoenix version: $PHOENIX_VERSION" >> "$target_dir/.tool-versions"
+        echo "# Note: Phoenix is not managed by asdf, this is just for reference" >> "$target_dir/.tool-versions"
     fi
     
-    echo ".tool-versions 文件已更新:"
+    echo ".tool-versions file updated:"
     cat "$target_dir/.tool-versions"
 }
 
 ##########################################################
-# 主程序入口
+# Main Program Entry
 ##########################################################
 
-# 定義全局變數
+# Define global variables
 docker_compose_cmd=""
 
-# 預設值
-ELIXIR_VERSION="latest"  # 使用 latest 來獲取最新版本
-ERLANG_VERSION="latest"  # 使用 latest 來獲取最新版本
-PHOENIX_VERSION=""       # 不設定預設值，讓使用者必須指定或在腳本中查詢最新版本
-PROJECT_PATH="."         # 預設為當前目錄
+# Default values
+ELIXIR_VERSION="latest"  # Use latest to get the newest version
+ERLANG_VERSION="latest"  # Use latest to get the newest version
+PHOENIX_VERSION=""       # No default value, user must specify or query in script
+PROJECT_PATH="."         # Default to current directory
 
-# 檢查 Docker Compose 命令
+# Check Docker Compose command
 check_docker_compose
 
-# 解析選項
+# Parse options
 while [[ $# -gt 0 ]]; do
     case $1 in
         -v|--phx|--phoenix-version)
@@ -140,165 +140,168 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# 檢查是否有命令要運行
+# Check if there are commands to run
 if [[ $# -eq 0 ]]; then
     show_help
     exit 0
 fi
 
-# 特殊命令處理
+# Special command handling
 if [[ "$1" == "update-versions" ]]; then
-    # 導出環境變數
+    # Export environment variables
     export ELIXIR_VERSION
     export ERLANG_VERSION
     export PHOENIX_VERSION
     
-    # 使用當前目錄
+    # Use current directory
     update_tool_versions "."
     exit 0
 fi
 
-# 獲取腳本的絕對路徑
+# Get absolute path of script
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# 檢查是否為 Homebrew 安裝
+# Check if this is a Homebrew installation
 if [[ "$SCRIPT_DIR" == "/opt/homebrew/Cellar/phx"* ]] || [[ "$SCRIPT_DIR" == "/usr/local/Cellar/phx"* ]]; then
-    # Homebrew 安裝路徑
+    # Homebrew installation path
     SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
-    echo "檢測到 Homebrew 安裝，使用配置路徑: $SCRIPT_DIR"
+    echo "Detected Homebrew installation, using config path: $SCRIPT_DIR"
 fi
 
-# 檢查是否是創建新項目的命令
+# Check if it's a command to create a new project
 if [[ "$1" == "new" ]]; then
-    # 從參數中獲取應用名稱和其他選項
+    # Get application name and other options from parameters
     APP_NAME=$2
     shift 2
 
-    # 如果未指定 Phoenix 版本，提示用戶輸入
+    # If Phoenix version is not specified, prompt user to input
     if [[ -z "$PHOENIX_VERSION" ]]; then
-        echo "請輸入要使用的 Phoenix 框架版本 (例如: 1.7.10)："
+        echo "Please enter the Phoenix framework version to use (e.g.: 1.7.10):"
         read -r PHOENIX_VERSION
         
         if [[ -z "$PHOENIX_VERSION" ]]; then
-            echo "錯誤：必須指定 Phoenix 框架版本"
+            echo "Error: Phoenix framework version must be specified"
             exit 1
         fi
     fi
 
-    # 設置用戶權限
+    # Setup user permissions
     setup_user_permissions
 
-    # 導出環境變數
+    # Export environment variables
     export PHOENIX_VERSION
     export ELIXIR_VERSION
     export ERLANG_VERSION
 
-    # 從腳本目錄中建立 Docker 映像
-    echo "正在建立 Phoenix $PHOENIX_VERSION 環境..."
-    echo "使用 Elixir $ELIXIR_VERSION 和 Erlang $ERLANG_VERSION（如果指定 'latest'，將使用最新版本）"
+    # Build Docker image from script directory
+    echo "Building Phoenix $PHOENIX_VERSION environment..."
+    echo "Using Elixir $ELIXIR_VERSION and Erlang $ERLANG_VERSION (if 'latest' is specified, the newest version will be used)"
     $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" build
 
-    # 目標路徑權限檢查
+    # Target path permission check
     if [ ! -d "$PROJECT_PATH" ]; then
         if ! mkdir -p "$PROJECT_PATH" 2>/dev/null; then
-            echo "錯誤：無法創建目錄 '$PROJECT_PATH'。請確保您有足夠的權限。"
+            echo "Error: Cannot create directory '$PROJECT_PATH'. Please ensure you have sufficient permissions."
             exit 1
         fi
     elif [ ! -w "$PROJECT_PATH" ]; then
-        echo "錯誤：您沒有對 '$PROJECT_PATH' 的寫入權限。請使用其他路徑或變更權限。"
+        echo "Error: You don't have write permission for '$PROJECT_PATH'. Please use another path or change permissions."
         exit 1
     fi
     
-    # 切換到指定目錄
-    cd "$PROJECT_PATH" || { echo "錯誤：無法切換到 '$PROJECT_PATH'"; exit 1; }
+    # Switch to specified directory
+    cd "$PROJECT_PATH" || { echo "Error: Unable to switch to '$PROJECT_PATH'"; exit 1; }
 
-    # 確保目錄不存在，否則 mix phx.new 會失敗
+    # Ensure directory doesn't exist, otherwise mix phx.new will fail
     if [[ -d "$APP_NAME" ]]; then
-        echo "錯誤：目錄 '$APP_NAME' 已存在"
+        echo "Error: Directory '$APP_NAME' already exists"
         exit 1
     fi
 
-    # 執行 mix phx.new 命令
-    echo "正在創建新的 Phoenix 應用 '$APP_NAME'..."
+    # Execute mix phx.new command
+    echo "Creating new Phoenix application '$APP_NAME'..."
     cd "$SCRIPT_DIR"
     
-    # 使用 -t 參數分配約即給 docker 雖然是容器執行但仍然將其視為一個終端
-    # 使用 -f 選項指定配置文件路徑
+    # Use -t parameter to allocate terminal for docker even though it's a container execution
+    # Use -f option to specify configuration file path
     $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -t -v "$PROJECT_PATH:/app" phoenix bash -c "echo Y | mix phx.new $APP_NAME $@"
 
-    # 將生成的文件移到當前目錄
-    echo "正在整理項目文件..."
+    # Move generated files to current directory
+    echo "Organizing project files..."
     cd "$PROJECT_PATH"
     mv $APP_NAME/* .
     mv $APP_NAME/.* . 2>/dev/null || true
     rmdir $APP_NAME
 
-    # 修改生成的數據庫配置，使用環境變數
-    echo "正在配置數據庫連接..."
+    # Modify the generated database configuration to use environment variables
+    echo "Configuring database connection..."
     sed -i '' 's/hostname: "localhost"/hostname: System.get_env("DATABASE_HOST", "localhost")/' "$PROJECT_PATH/config/dev.exs"
     sed -i '' 's/username: "postgres"/username: System.get_env("DATABASE_USER", "postgres")/' "$PROJECT_PATH/config/dev.exs"
     sed -i '' 's/password: "postgres"/password: System.get_env("DATABASE_PASSWORD", "postgres")/' "$PROJECT_PATH/config/dev.exs"
     
-    # 確保配置中啟用了實時重載
+    # Ensure live_reload is enabled in configuration
     if ! grep -q "live_reload:" "$PROJECT_PATH/config/dev.exs"; then
-        echo "警告: 沒有找到 live_reload 配置，可能需要手動添加。"
+        echo "Warning: live_reload configuration not found, may need to be added manually."
     fi
     
-    # 創建 .tool-versions 文件
+    # Create .tool-versions file
     if [ ! -w "$(dirname "$PROJECT_PATH/.tool-versions")" ]; then
-        echo "警告：無法創建 .tool-versions 文件，因為缺少寫入權限。"
+        echo "Warning: Cannot create .tool-versions file due to lack of write permissions."
     else
         update_tool_versions "$PROJECT_PATH"
     fi
     
-    # 修正權限
-    echo "正在修正文件權限..."
+    # Fix permissions
+    echo "Fixing file permissions..."
     
-    # 檢查目標路徑是否存在
+    # Check if target path exists
     if [ ! -d "$PROJECT_PATH" ]; then
-        echo "警告：找不到目標目錄 '$PROJECT_PATH'，跳過權限修正。"
+        echo "Warning: Target directory '$PROJECT_PATH' not found, skipping permission fix."
     else
-        # 使用相對於容器 /app 目錄的路徑
-        # 在容器中，/app 會被映射到正確的路徑
-        echo "正在修正目錄權限: $PROJECT_PATH"
+        # Use relative path to container's /app directory
+        # In the container, /app will be mapped to the correct path
+        echo "Fixing directory permissions: $PROJECT_PATH"
         $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm --user root phoenix bash -c "cd /app && chown -R $(id -u):$(id -g) ."
     fi
     
-    echo "Phoenix 應用 '$APP_NAME' 已創建成功！"
-    echo "使用 './phx.sh deps.get' 獲取依賴"
-    echo "使用 './phx.sh ecto.create' 創建資料庫"
-    echo "使用 './phx.sh phx.server' 啟動服務器"
+    echo "Phoenix application '$APP_NAME' created successfully!"
+    echo "Use './phx.sh deps.get' to get dependencies"
+    echo "Use './phx.sh ecto.create' to create database"
+    echo "Use './phx.sh phx.server' to start server"
 else
-    # 設置用戶權限
+    # Setup user permissions
     setup_user_permissions
-    
-    # 導出環境變數
+
+    # Export environment variables
     export PHOENIX_VERSION
     export ELIXIR_VERSION
     export ERLANG_VERSION
 
-    # 使用 -f 選項指定配置文件路徑
+    # Determine if we can use the project directory directly
+    # If a default path is provided, it will be mapped to /app in the container
+    # Use -f option to specify configuration file path
+    $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" phoenix bash -c "$1 $2 $3 $4 $5 $6 $7 $8 $9"
 
-    # 特殊命令處理
+    # Special command handling
     if [[ "$1" == "bash" ]]; then
-        # 直接進入容器 bash
+        # Enter container bash directly
         $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app phoenix bash
     elif [[ "$1" == "iex" ]] && [[ "$#" == 1 ]]; then
-        # 啟動 IEx shell
+        # Start IEx shell
         $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app phoenix iex
     elif [[ "$1" == "iex.phx" ]] || [[ "$1" == "iex:phx" ]]; then
-        # 啟動 IEx 並加載 Phoenix 應用
+        # Start IEx and load Phoenix application
         $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix iex -S mix phx.server
     else
-        # 確認是否為 iex 命令
+        # Check if it's an iex command
         if [[ "$1" == "iex" ]] && [[ "$#" -gt 1 ]]; then
-            # 直接執行 iex 但會保留其附加選項
+            # Execute iex directly but preserve additional options
             $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app phoenix "$@"
         elif [[ "$1" == "phx.server" ]]; then
-            # 啟動 Phoenix 伺服器
+            # Start Phoenix server
             $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix phx.server
         else
-            # 執行所有其他 mix 命令
+            # Execute all other mix commands
             $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
         fi
     fi

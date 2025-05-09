@@ -1,94 +1,94 @@
-# Phoenix Docker 開發環境
+# Phoenix Docker Development Environment
 
-這是一個用於 Elixir Phoenix 本地開發的 Docker 環境。它允許您：
-- 使用 Elixir 1.18.3 和 Erlang/OTP 27
-- 指定任何 Phoenix 框架版本
-- 在指定路徑創建新專案
-- 使用您本地的 PostgreSQL 資料庫
-- 運行所有 Phoenix 支援的 mix 命令
-- **不需要在本機安裝 Elixir 或 Erlang**
+This is a Docker environment for Elixir Phoenix local development. It allows you to:
+- Use Elixir 1.18.3 and Erlang/OTP 27
+- Specify any Phoenix framework version
+- Create new projects in a specified path
+- Use your local PostgreSQL database
+- Run all mix commands supported by Phoenix
+- **No need to install Elixir or Erlang locally**
 
-## 前置需求
+## Prerequisites
 
-- Docker 與 Docker Compose
-- 本地安裝的 PostgreSQL（通過 `brew install postgresql@16` 或其他版本）
-- 確保 PostgreSQL 服務已啟動（`brew services start postgresql@16`）
+- Docker and Docker Compose
+- Locally installed PostgreSQL (via `brew install postgresql@16` or other version)
+- Ensure PostgreSQL service is started (`brew services start postgresql@16`)
 
-## 使用說明
+## Usage Instructions
 
-### phx.sh 腳本的完整用法
-
-```bash
-# 基本語法
-./phx.sh [選項] 命令 [命令參數]
-
-# 可用選項
-#  --path PATH       指定項目路徑，預設為目前目錄
-#  --phx VERSION     指定 Phoenix 版本，例如 1.8.0-rc.3
-
-# 特殊命令
-#  new APP_NAME      創建新的 Phoenix 專案
-#  bash              進入容器的 bash 終端
-#  iex               啟動 Elixir 互動式控制台
-#  iex.phx           啟動 Elixir 互動式控制台並加載 Phoenix 應用
-
-# 任何其他命令會被傳送到 mix，例如：
-#  ecto.create       創建資料庫
-#  ecto.migrate      運行遷移
-#  deps.get          安裝依賴
-#  phx.server        啟動 Phoenix 伺服器
-#  phx.gen.html      產生 HTML 資源
-```
-
-### 創建新的 Phoenix 專案
+### Full Usage of the phx.sh Script
 
 ```bash
-# 在預設目錄創建新項目，系統會提示您輸入 Phoenix 版本
-./phx.sh new my_app
+# Basic syntax
+phx [options] command [command parameters]
 
-# 指定 Phoenix 版本
-./phx.sh --phx 1.8.0-rc.3 new my_app
+# Available options
+#  --path PATH       Specify project path, default is current directory
+#  --phx VERSION     Specify Phoenix version, e.g. 1.8.0-rc.3
 
-# 在指定路徑創建新專案
-./phx.sh --path /指定路徑 --phx 1.8.0-rc.3 new my_app --live
+# Special commands
+#  new APP_NAME      Create a new Phoenix project
+#  bash              Enter the container's bash terminal
+#  iex               Start Elixir interactive console
+#  iex.phx           Start Elixir interactive console and load Phoenix application
+
+# Any other commands will be passed to mix, for example:
+#  ecto.create       Create database
+#  ecto.migrate      Run migrations
+#  deps.get          Install dependencies
+#  phx.server        Start Phoenix server
+#  phx.gen.html      Generate HTML resources
 ```
 
-### 特別說明
-當您只運行 `./phx.sh new my_app` 而不指定 Phoenix 版本時：
+### Creating a New Phoenix Project
 
-1. 腳本會提示您輸入要使用的 Phoenix 版本
-2. 如果您輸入有效的版本號，專案會成功創建
-3. 如果您按下 Enter 而不輸入版本號，腳本會報錯並退出
-4. 無論您創建任何項目，以下版本都是固定的：
+```bash
+# Create a new project in the default directory, the system will prompt you to enter the Phoenix version
+phx new my_app
+
+# Specify Phoenix version
+phx --phx 1.8.0-rc.3 new my_app
+
+# Create a new project in a specified path
+phx --path /specified/path --phx 1.8.0-rc.3 new my_app --live
+```
+
+### Special Notes
+When you only run `phx new my_app` without specifying a Phoenix version:
+
+1. The script will prompt you to enter the Phoenix version to use
+2. If you enter a valid version number, the project will be successfully created
+3. If you press Enter without entering a version number, the script will error and exit
+4. Regardless of which project you create, the following versions are fixed:
    - Elixir: 1.18.3
    - Erlang/OTP: 27
-   - 只有 Phoenix 版本是可變的，預設為 1.7.10
+   - Only the Phoenix version is variable, with a default of 1.7.10
 
-### 運行現有專案
+### Running Existing Projects
 
 ```bash
-# 在指定路徑運行已存在的 Phoenix 專案
-./phx.sh --path /您專案的路徑 phx.server
+# Run an existing Phoenix project in a specified path
+phx --path /path/to/your/project phx.server
 
-# 創建資料庫
-./phx.sh --path /您專案的路徑 ecto.create
+# Create database
+phx --path /path/to/your/project ecto.create
 
-# 運行遷移
-./phx.sh --path /您專案的路徑 ecto.migrate
+# Run migrations
+phx --path /path/to/your/project ecto.migrate
 
-# 安裝依賴
-./phx.sh --path /您專案的路徑 deps.get
+# Install dependencies
+phx --path /path/to/your/project deps.get
 
-# 啟動互動式 Elixir 網頁伺服器
-./phx.sh --path /您專案的路徑 iex.phx
+# Start interactive Elixir web server
+phx --path /path/to/your/project iex.phx
 ```
 
-### 注意事項
+### Notes
 
-1. 第一次運行專案時，它會自動下載 Tailwind 和其他前端資源，可能需要一些時間
-2. 確保 PostgreSQL 服務已啟動，否則專案將無法連接到資料庫
-3. 您可以在容器內部執行 bash 以進行進階操作：
+1. The first time you run a project, it will automatically download Tailwind and other frontend resources, which may take some time
+2. Make sure the PostgreSQL service is running, otherwise the project will not be able to connect to the database
+3. You can execute bash inside the container for advanced operations:
    ```bash
-   ./phx.sh --path /您專案的路徑 bash
+   phx --path /path/to/your/project bash
    ```
-4. 所有的檔案會被儲存在您的本地檔案系統中，並且可以用您喜歡的編輯器編輯
+4. All files will be stored in your local file system and can be edited with your preferred editor

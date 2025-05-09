@@ -1,12 +1,12 @@
-# 使用官方 Elixir Docker 映像
-# 使用 Elixir 1.18.3 和 Erlang/OTP 27
+# Use official Elixir Docker image
+# Using Elixir 1.18.3 and Erlang/OTP 27
 FROM elixir:1.18.3-otp-27
 
-# 設定時區
+# Set timezone
 ENV TZ=Asia/Taipei
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# 安裝必要的工具
+# Install necessary tools
 RUN apt-get update -y && apt-get install -y \
     build-essential \
     inotify-tools \
@@ -14,17 +14,17 @@ RUN apt-get update -y && apt-get install -y \
     postgresql-client \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 工作目錄
+# Working directory
 WORKDIR /app
 
-# 設置文件系統監控
+# Set up file system monitoring
 ENV WATCHDOG_ENABLED=true
 
-# 安裝必要的 Elixir 套件
+# Install necessary Elixir packages
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-# 創建目錄並設定權限以便非 root 用戶可以安裝套件
+# Create directories and set permissions for non-root users to install packages
 RUN mkdir -p /opt/mix/archives && \
     chmod -R 777 /opt/mix && \
     mkdir -p /opt/hex/packages/hexpm && \
