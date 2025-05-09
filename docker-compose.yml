@@ -1,0 +1,35 @@
+services:
+  phoenix:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app                  # 將當前目錄掛載到容器的/app目錄
+      - mix_deps:/app/deps      # 將依賴項存儲在命名卷中以提高性能
+      - build_cache:/app/_build # 將編譯緩存存儲在命名卷中以提高性能
+    # Mac 上不要使用 network_mode: host，因為它在 Mac 上的行為不同
+    ports:
+      - "4000:4000"  # 暴露 Phoenix 端口
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # 將 host.docker.internal 指向容器網關
+    dns:
+      - 8.8.8.8   # Google DNS
+      - 1.1.1.1   # Cloudflare DNS
+    environment:
+      # 只保留 Phoenix 版本環境變數，因為 Erlang 和 Elixir 已在 Dockerfile 中指定
+      # 使用穩定版本的 Phoenix
+      - PHOENIX_VERSION=${PHOENIX_VERSION:-1.7.10}
+      - DATABASE_HOST=host.docker.internal  # 指向 Mac 主機
+      - DATABASE_USER=${POSTGRES_USER:-postgres}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DATABASE_NAME=${POSTGRES_DB:-postgres}
+      # 確保文件修改能被檢測到
+      - WATCHDOG_ENABLED=true
+    command: phx.server
+    stdin_open: true
+    tty: true
+    user: "${CURRENT_UID:-1000}:${CURRENT_GID:-1000}"  # 使用宿主機用戶的UID/GID
+
+volumes:
+  mix_deps:     # 緩存依賴項
+  build_cache:  # 緩存編譯結果
