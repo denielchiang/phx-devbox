@@ -196,8 +196,7 @@ if [[ "$1" == "new" ]]; then
     # 從腳本目錄中建立 Docker 映像
     echo "正在建立 Phoenix $PHOENIX_VERSION 環境..."
     echo "使用 Elixir $ELIXIR_VERSION 和 Erlang $ERLANG_VERSION（如果指定 'latest'，將使用最新版本）"
-    cd "$SCRIPT_DIR"
-    $docker_compose_cmd build
+    $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" build
 
     # 目標路徑權限檢查
     if [ ! -d "$PROJECT_PATH" ]; then
@@ -224,7 +223,8 @@ if [[ "$1" == "new" ]]; then
     cd "$SCRIPT_DIR"
     
     # 使用 -t 參數分配約即給 docker 雖然是容器執行但仍然將其視為一個終端
-    $docker_compose_cmd run --rm -t -v "$PROJECT_PATH:/app" phoenix bash -c "echo Y | mix phx.new $APP_NAME $@"
+    # 使用 -f 選項指定配置文件路徑
+    $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -t -v "$PROJECT_PATH:/app" phoenix bash -c "echo Y | mix phx.new $APP_NAME $@"
 
     # 將生成的文件移到當前目錄
     echo "正在整理項目文件..."
@@ -253,7 +253,6 @@ if [[ "$1" == "new" ]]; then
     
     # 修正權限
     echo "正在修正文件權限..."
-    cd "$SCRIPT_DIR"
     
     # 檢查目標路徑是否存在
     if [ ! -d "$PROJECT_PATH" ]; then
@@ -262,7 +261,7 @@ if [[ "$1" == "new" ]]; then
         # 使用相對於容器 /app 目錄的路徑
         # 在容器中，/app 會被映射到正確的路徑
         echo "正在修正目錄權限: $PROJECT_PATH"
-        $docker_compose_cmd run --rm --user root phoenix bash -c "cd /app && chown -R $(id -u):$(id -g) ."
+        $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm --user root phoenix bash -c "cd /app && chown -R $(id -u):$(id -g) ."
     fi
     
     echo "Phoenix 應用 '$APP_NAME' 已創建成功！"
@@ -278,30 +277,29 @@ else
     export ELIXIR_VERSION
     export ERLANG_VERSION
 
-    # 切換到腳本目錄使用 docker-compose
-    cd "$SCRIPT_DIR"
+    # 使用 -f 選項指定配置文件路徑
 
     # 特殊命令處理
     if [[ "$1" == "bash" ]]; then
         # 直接進入容器 bash
-        $docker_compose_cmd run --rm -v "$PROJECT_PATH:/app" -w /app phoenix bash
+        $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app phoenix bash
     elif [[ "$1" == "iex" ]] && [[ "$#" == 1 ]]; then
         # 啟動 IEx shell
-        $docker_compose_cmd run --rm -v "$PROJECT_PATH:/app" -w /app phoenix iex
+        $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app phoenix iex
     elif [[ "$1" == "iex.phx" ]] || [[ "$1" == "iex:phx" ]]; then
         # 啟動 IEx 並加載 Phoenix 應用
-        $docker_compose_cmd run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix iex -S mix phx.server
+        $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix iex -S mix phx.server
     else
         # 確認是否為 iex 命令
         if [[ "$1" == "iex" ]] && [[ "$#" -gt 1 ]]; then
             # 直接執行 iex 但會保留其附加選項
-            $docker_compose_cmd run --rm -v "$PROJECT_PATH:/app" -w /app phoenix "$@"
+            $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app phoenix "$@"
         elif [[ "$1" == "phx.server" ]]; then
             # 啟動 Phoenix 伺服器
-            $docker_compose_cmd run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix phx.server
+            $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix phx.server
         else
             # 執行所有其他 mix 命令
-            $docker_compose_cmd run --rm -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
+            $docker_compose_cmd -f "$SCRIPT_DIR/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
         fi
     fi
 fi
