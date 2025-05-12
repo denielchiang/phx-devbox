@@ -80,17 +80,138 @@ setup_user_permissions() {
 update_tool_versions() {
     local target_dir="$1"
     
+    # Get actual Erlang and Elixir versions from Docker container
+    local actual_erlang_version
+    local actual_elixir_version
+    
+    # If ERLANG_VERSION or ELIXIR_VERSION is "latest", extract the actual version from the Docker container
+    if [[ "$ERLANG_VERSION" == "latest" || "$ELIXIR_VERSION" == "latest" ]]; then
+        echo "Getting actual Erlang and Elixir versions from Docker container..."
+        
+        # Run a temporary container to extract version information
+        local versions_output
+        versions_output=$(run_with_safe_compose run --rm phoenix bash -c "echo Erlang \$(cat /usr/local/lib/erlang/releases/*/OTP_VERSION) && echo Elixir \$(elixir --version | grep Elixir | cut -d' ' -f2)" 2>/dev/null)
+        
+        # Extract versions from output
+        actual_erlang_version=$(echo "$versions_output" | grep Erlang | cut -d' ' -f2)
+        actual_elixir_version=$(echo "$versions_output" | grep Elixir | cut -d' ' -f2)
+        
+        # Use actual versions if available, otherwise fall back to defaults
+        if [[ -z "$actual_erlang_version" ]]; then
+            echo "Warning: Could not get Erlang version from Docker container, using default 27.0.0"
+            actual_erlang_version="27.0.0"
+        fi
+        
+        if [[ -z "$actual_elixir_version" ]]; then
+            echo "Warning: Could not get Elixir version from Docker container, using default 1.16.0"
+            actual_elixir_version="1.16.0"
+        fi
+    else
+        # Use specified versions
+        actual_erlang_version="$ERLANG_VERSION"
+        actual_elixir_version="$ELIXIR_VERSION"
+    fi
+    
     # Create .tool-versions file
     cat > "$target_dir/.tool-versions" << EOF
-erlang $ERLANG_VERSION
-elixir $ELIXIR_VERSION
+erlang $actual_erlang_version
+elixir $actual_elixir_version
 EOF
     
     # Show the file contents for confirmation
-    echo "Created .tool-versions file with the following content:"
+    echo "Creating .tool-versions file with actual versions..."
+    echo "Created .tool-versions file with versions: Erlang $actual_erlang_version, Elixir $actual_elixir_version"
+}
+
+# Check availability of specified versions
+check_versions_availability() {
+    local continue_anyway=false
     
-    echo ".tool-versions file updated:"
-    cat "$target_dir/.tool-versions"
+    # Check Phoenix version availability
+    if [[ "$PHOENIX_VERSION" != "latest" && "$PHOENIX_VERSION" != "" ]]; then
+        echo "Checking Phoenix $PHOENIX_VERSION availability..."
+        if ! curl --silent --fail "https://hex.pm/api/packages/phoenix" | grep -q "\"$PHOENIX_VERSION\""; then
+            echo "Warning: Phoenix version $PHOENIX_VERSION may not be available."
+            echo "Available Phoenix versions (recent):"
+            curl --silent "https://hex.pm/api/packages/phoenix" | grep -o '"[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*[^"]*"' | sort -Vr | head -5 | sed 's/"//g' | sed 's/^/  - /'
+            echo "Would you like to continue anyway? (yes/no)"
+            read -r choice
+            if [[ "$choice" != "yes" && "$choice" != "y" ]]; then
+                echo "Operation cancelled by user."
+                exit 1
+            fi
+            continue_anyway=true
+        else
+            echo "Phoenix $PHOENIX_VERSION is available."
+        fi
+    fi
+    
+    # Check Elixir version availability
+    if [[ "$ELIXIR_VERSION" != "latest" ]]; then
+        local elixir_tags_url="https://hub.docker.com/v2/repositories/library/elixir/tags?page_size=100"
+        echo "Checking Elixir $ELIXIR_VERSION availability..."
+
+        # For Elixir, we need to check if the version exists in Docker Hub
+        if ! curl --silent "$elixir_tags_url" | grep -q "\"name\":\"$ELIXIR_VERSION" && ! curl --silent "$elixir_tags_url" | grep -q "\"name\":\"$ELIXIR_VERSION-otp"; then
+            echo "Warning: Elixir version $ELIXIR_VERSION may not be available."
+            echo "Available Elixir versions (recent):"
+            curl --silent "$elixir_tags_url" | grep -o '"name":"[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*[^"]*"' | sort -Vr | head -5 | sed 's/"name":"//g' | sed 's/"//g' | sed 's/-otp.*//g' | uniq | sed 's/^/  - /'
+            
+            if [[ "$continue_anyway" == "false" ]]; then
+                echo "Would you like to continue anyway? (yes/no)"
+                read -r choice
+                if [[ "$choice" != "yes" && "$choice" != "y" ]]; then
+                    echo "Operation cancelled by user."
+                    exit 1
+                fi
+                continue_anyway=true
+            fi
+        else
+            echo "Elixir $ELIXIR_VERSION is available."
+        fi
+    fi
+    
+    # Check Erlang version availability if not using latest
+    if [[ "$ERLANG_VERSION" != "latest" ]]; then
+        echo "Checking Erlang $ERLANG_VERSION availability..."
+        
+        # Check if the specified Erlang version is compatible with Elixir
+        # This is a simplification; in reality, you'd need a compatibility matrix
+        if ! curl --silent "https://hub.docker.com/v2/repositories/erlang/otp/tags?page_size=100" | grep -q "\"name\":\"$ERLANG_VERSION"; then
+            echo "Warning: Erlang version $ERLANG_VERSION may not be available."
+            echo "Available Erlang versions (recent):"
+            curl --silent "https://hub.docker.com/v2/repositories/erlang/otp/tags?page_size=100" | grep -o '"name":"[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*[^"]*"' | grep -v "alpha\|beta\|rc" | sort -Vr | head -5 | sed 's/"name":"//g' | sed 's/"//g' | sed 's/-.*//g' | uniq | sed 's/^/  - /'
+            
+            if [[ "$continue_anyway" == "false" ]]; then
+                echo "Would you like to continue anyway? (yes/no)"
+                read -r choice
+                if [[ "$choice" != "yes" && "$choice" != "y" ]]; then
+                    echo "Operation cancelled by user."
+                    exit 1
+                fi
+            fi
+        else
+            echo "Erlang $ERLANG_VERSION is available."
+        fi
+    fi
+    
+    # If specific Elixir and Erlang versions are provided, check if the combination exists
+    if [[ "$ELIXIR_VERSION" != "latest" && "$ERLANG_VERSION" != "latest" ]]; then
+        echo "Checking compatibility of Elixir $ELIXIR_VERSION with Erlang $ERLANG_VERSION..."
+        if ! curl --silent "https://hub.docker.com/v2/repositories/library/elixir/tags?page_size=100" | grep -q "\"name\":\"$ELIXIR_VERSION-otp-$ERLANG_VERSION"; then
+            echo "Warning: The specific combination of Elixir $ELIXIR_VERSION with Erlang $ERLANG_VERSION may not be available."
+            echo "Would you like to use Elixir $ELIXIR_VERSION with the default Erlang version? (yes/no)"
+            read -r choice
+            if [[ "$choice" != "yes" && "$choice" != "y" ]]; then
+                echo "Operation cancelled by user."
+                exit 1
+            fi
+            ERLANG_VERSION="latest"
+            echo "Using Elixir $ELIXIR_VERSION with latest compatible Erlang version."
+        else
+            echo "Combination of Elixir $ELIXIR_VERSION with Erlang $ERLANG_VERSION is available."
+        fi
+    fi
 }
 
 # Prepare docker-compose.yml file to avoid Docker mount issues
@@ -227,8 +348,9 @@ while [[ $# -gt 0 ]]; do
             export ERLANG_VERSION
             export PHOENIX_VERSION
             
-            # Use current directory
-            update_tool_versions "."
+            # Use PROJECT_PATH if specified, otherwise use current directory
+            # PROJECT_PATH is initially set to current directory, but can be overridden with -p/--path
+            update_tool_versions "$PROJECT_PATH"
             exit 0
             ;;
         *)
@@ -311,11 +433,37 @@ if [[ "$FOUND_CONFIG" != true ]]; then
     exit 1
 fi
 
+# Check availability of specified versions before any operation that would use them
+if [[ "$1" == "new" || ( "$1" != "help" && "$1" != "-h" && "$1" != "--help" ) ]]; then
+    check_versions_availability
+fi
+
 # Check if it's a command to create a new project
 if [[ "$1" == "new" ]]; then
     # Get application name and other options from parameters
     APP_NAME=$2
     shift 2
+    
+    # Store remaining parameters for passing to mix phx.new, excluding our custom parameters
+    CUSTOM_PARAMS=()
+    for param in "$@"; do
+        # Skip any -p/--path parameter and its value since they are for phx script, not for mix phx.new
+        if [[ "$param" == "-p" || "$param" == "--path" ]]; then
+            # Skip this parameter (will be processed separately)
+            shift
+            shift  # Also skip the value
+            continue
+        fi
+        
+        # If we already processed a path parameter, skip the value
+        if [[ "$SKIP_NEXT" == "true" ]]; then
+            SKIP_NEXT=false
+            continue
+        fi
+        
+        # Add other parameters to be passed to mix phx.new
+        CUSTOM_PARAMS+=("$param")
+    done
 
     # If Phoenix version is not specified, prompt user to input
     if [[ -z "$PHOENIX_VERSION" ]]; then
@@ -364,8 +512,9 @@ if [[ "$1" == "new" ]]; then
     # Execute mix phx.new command
     echo "Creating new Phoenix application '$APP_NAME'..."
     
-    # Use safe docker-compose handling
-    run_with_safe_compose run --rm -t -v "$PROJECT_PATH:/app" phoenix bash -c "echo Y | mix phx.new $APP_NAME $*"
+    # Use safe docker-compose handling - only pass filtered parameters
+    echo "Initialization complete, preparing to execute command: bash -c echo Y | mix phx.new $APP_NAME ${CUSTOM_PARAMS[*]}"
+    run_with_safe_compose run --rm -t -v "$PROJECT_PATH:/app" phoenix bash -c "echo Y | mix phx.new $APP_NAME ${CUSTOM_PARAMS[*]}"
     
     # Check if command executed successfully
     if [ $? -ne 0 ]; then
@@ -376,27 +525,23 @@ if [[ "$1" == "new" ]]; then
         exit 1
     fi
 
-    # Move generated files to current directory
-    echo "Organizing project files..."
-    cd "$PROJECT_PATH"
-    mv $APP_NAME/* .
-    mv $APP_NAME/.* . 2>/dev/null || true
-    rmdir $APP_NAME
+    # Keep the project files in the app_name directory structure
+    echo "Project files are organized under $PROJECT_PATH/$APP_NAME/"
 
     # Modify the generated database configuration to use environment variables
     echo "Configuring database connection..."
-    sed -i '' 's/hostname: "localhost"/hostname: System.get_env("DATABASE_HOST", "localhost")/' "$PROJECT_PATH/config/dev.exs"
-    sed -i '' 's/username: "postgres"/username: System.get_env("DATABASE_USER", "postgres")/' "$PROJECT_PATH/config/dev.exs"
-    sed -i '' 's/password: "postgres"/password: System.get_env("DATABASE_PASSWORD", "postgres")/' "$PROJECT_PATH/config/dev.exs"
+    sed -i '' 's/hostname: "localhost"/hostname: System.get_env("DATABASE_HOST", "localhost")/' "$PROJECT_PATH/$APP_NAME/config/dev.exs"
+    sed -i '' 's/username: "postgres"/username: System.get_env("DATABASE_USER", "postgres")/' "$PROJECT_PATH/$APP_NAME/config/dev.exs"
+    sed -i '' 's/password: "postgres"/password: System.get_env("DATABASE_PASSWORD", "postgres")/' "$PROJECT_PATH/$APP_NAME/config/dev.exs"
     
     # Ensure live_reload is enabled in configuration
-    if ! grep -q "live_reload:" "$PROJECT_PATH/config/dev.exs"; then
+    if ! grep -q "live_reload:" "$PROJECT_PATH/$APP_NAME/config/dev.exs"; then
         echo "Warning: live_reload configuration not found in dev.exs, may need to be added manually."
     fi
     
-    # Create .tool-versions file
+    # Create .tool-versions file in the app directory
     echo "Creating .tool-versions file..."
-    update_tool_versions "$PROJECT_PATH"
+    update_tool_versions "$PROJECT_PATH/$APP_NAME"
     
     echo "Phoenix application '$APP_NAME' created successfully!"
     echo "To start your Phoenix server:"
