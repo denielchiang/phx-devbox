@@ -764,7 +764,7 @@ else
                 chmod -R 777 "$PROJECT_ROOT/deps" "$PROJECT_ROOT/_build"
                 
                 # Create a special docker-compose file for deps.get without named volumes
-                local deps_tmp_dir=$(mktemp -d)
+                deps_tmp_dir=$(mktemp -d)
                 
                 # Copy docker-compose.yml and modify it
                 cp "$DOCKER_COMPOSE_FILE" "$deps_tmp_dir/docker-compose.yml"
@@ -787,7 +787,7 @@ else
                 $docker_compose_cmd -f "$deps_tmp_dir/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix bash -c "mkdir -p ./deps ./deps/heroicons ./deps/heroicons/optimized && mkdir -p ./_build && mix deps.get"
                 
                 # Save exit status
-                local exit_status=$?
+                exit_status=$?
                 
                 # Clean up temporary directory
                 rm -rf "$deps_tmp_dir"
