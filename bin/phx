@@ -102,6 +102,10 @@ prepare_docker_compose() {
     # Remove ".:/app" mount to avoid Docker mounting Homebrew directory
     cat "$SCRIPT_DIR/docker-compose.yml" | sed 's|- \.:/app.*||g' > "$tmp_dir/docker-compose.yml"
     
+    # Copy Dockerfile and other necessary files
+    cp "$SCRIPT_DIR/Dockerfile" "$tmp_dir/Dockerfile"
+    cp "$SCRIPT_DIR/docker-entrypoint.sh" "$tmp_dir/docker-entrypoint.sh"
+    
     # Return temporary directory path
     echo "$tmp_dir"
 }
