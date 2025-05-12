@@ -749,7 +749,7 @@ else
             
             # Special handling for deps.get command
             if [[ "$1" == "deps.get" ]]; then
-                echo "Running deps.get with special volume handling..."
+                echo "Running deps.get with bind mount volumes instead of named volumes..."
                 
                 # First ensure the deps directory exists locally
                 PROJECT_ROOT="$PROJECT_PATH"
@@ -761,9 +761,39 @@ else
                 
                 # Create deps and _build directories locally with proper permissions
                 mkdir -p "$PROJECT_ROOT/deps" "$PROJECT_ROOT/_build"
+                chmod -R 777 "$PROJECT_ROOT/deps" "$PROJECT_ROOT/_build"
                 
-                # Now run the deps.get command
-                run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix bash -c "mkdir -p ./deps && mix deps.get"
+                # Create a special docker-compose file for deps.get without named volumes
+                local deps_tmp_dir=$(mktemp -d)
+                
+                # Copy docker-compose.yml and modify it
+                cp "$DOCKER_COMPOSE_FILE" "$deps_tmp_dir/docker-compose.yml"
+                cp "$SCRIPT_DIR/Dockerfile" "$deps_tmp_dir/Dockerfile"
+                cp "$SCRIPT_DIR/docker-entrypoint.sh" "$deps_tmp_dir/docker-entrypoint.sh"
+                
+                # Remove named volumes and use bind mounts instead
+                if [[ "$(uname)" == "Darwin" ]]; then
+                    # Mac version
+                    sed -i '' 's|- mix_deps:/app/deps||g' "$deps_tmp_dir/docker-compose.yml"
+                    sed -i '' 's|- build_cache:/app/_build||g' "$deps_tmp_dir/docker-compose.yml"
+                else
+                    # Linux version
+                    sed -i 's|- mix_deps:/app/deps||g' "$deps_tmp_dir/docker-compose.yml"
+                    sed -i 's|- build_cache:/app/_build||g' "$deps_tmp_dir/docker-compose.yml"
+                fi
+                
+                # Run the deps.get command with the modified compose file
+                echo "Using direct bind mount for deps and _build directories..."
+                $docker_compose_cmd -f "$deps_tmp_dir/docker-compose.yml" run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix bash -c "mkdir -p ./deps ./deps/heroicons ./deps/heroicons/optimized && mkdir -p ./_build && mix deps.get"
+                
+                # Save exit status
+                local exit_status=$?
+                
+                # Clean up temporary directory
+                rm -rf "$deps_tmp_dir"
+                
+                # Return the original command's exit status
+                return $exit_status
             else
                 # Execute all other mix commands
                 run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
