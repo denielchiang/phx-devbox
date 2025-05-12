@@ -257,12 +257,51 @@ find_project_dir() {
             echo "Detected Phoenix project in subdirectory: $project_name"
         elif [ ${#phoenix_dirs[@]} -gt 1 ]; then
             # Multiple Phoenix projects found
-            echo "Multiple Phoenix projects detected. Please specify which project to use with -p flag."
+            echo "Error: Multiple Phoenix projects detected in the current directory."
+            echo "Please specify which project to use with -p flag, or cd into the specific project directory."
+            echo "Available project directories:"
+            for dir in "${phoenix_dirs[@]}"; do
+                echo "  - $(basename "$dir")"
+            done
             exit 1
         else
             # No Phoenix project found
-            echo "No Phoenix project detected. Make sure you're in a Phoenix project directory."
-            echo "If this is a new project, run 'phx new [app_name]' first."
+            echo "Error: No Phoenix project detected in the current directory."
+            echo "Please run this command from within a Phoenix project directory."
+            echo "If this is a new project, run 'phx new [app_name]' first, then 'cd [app_name]'."
+            
+            # Check if there are any directories containing mix.exs files in parent directories
+            local current_path="$PROJECT_PATH"
+            local parent_paths=()
+            
+            # Look up to 3 levels up for mix.exs files
+            for i in {1..3}; do
+                current_path="$(dirname "$current_path")"
+                if [ -f "$current_path/mix.exs" ]; then
+                    parent_paths+=("$current_path")
+                    break
+                else
+                    # Check subdirectories one level deep
+                    for subdir in "$current_path"/*; do
+                        if [ -d "$subdir" ] && [ -f "$subdir/mix.exs" ]; then
+                            parent_paths+=("$subdir")
+                        fi
+                    done
+                    
+                    if [ ${#parent_paths[@]} -gt 0 ]; then
+                        break
+                    fi
+                fi
+            done
+            
+            if [ ${#parent_paths[@]} -gt 0 ]; then
+                echo ""  # Empty line for better readability
+                echo "Hint: Found Phoenix project(s) in nearby directories. You might want to 'cd' into one of these:"
+                for dir in "${parent_paths[@]}"; do
+                    echo "  cd $(realpath --relative-to="$PWD" "$dir")"
+                done
+            fi
+            
             exit 1
         fi
     fi
