@@ -222,9 +222,24 @@ prepare_docker_compose() {
     # Create temporary directory
     local tmp_dir=$(mktemp -d)
     
-    # Copy docker-compose.yml to temporary directory
+    # Copy docker-compose.yml and other needed files to temporary directory
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
         cp "$DOCKER_COMPOSE_FILE" "$tmp_dir/docker-compose.yml"
+        
+        # Also copy Dockerfile and docker-entrypoint.sh
+        if [ -f "$SCRIPT_DIR/Dockerfile" ]; then
+            cp "$SCRIPT_DIR/Dockerfile" "$tmp_dir/Dockerfile"
+        else
+            echo "Error: Dockerfile not found at $SCRIPT_DIR/Dockerfile"
+            exit 1
+        fi
+        
+        if [ -f "$SCRIPT_DIR/docker-entrypoint.sh" ]; then
+            cp "$SCRIPT_DIR/docker-entrypoint.sh" "$tmp_dir/docker-entrypoint.sh"
+        else
+            echo "Error: docker-entrypoint.sh not found at $SCRIPT_DIR/docker-entrypoint.sh"
+            exit 1
+        fi
     else
         echo "Error: docker-compose.yml not found at $DOCKER_COMPOSE_FILE"
         exit 1
