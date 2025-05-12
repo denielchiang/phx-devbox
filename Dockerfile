@@ -34,18 +34,18 @@ RUN mkdir -p /opt/mix/archives && \
     mkdir -p /root/.hex && \
     chmod -R 777 /root/.hex
 
-# 設定 shell 使用 login
+# Set shell to use login mode
 SHELL ["/bin/bash", "-l", "-c"]
 
-# 在運行時腳本中嘗試不同的方法
+# Copy entrypoint script with different methods
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# 給予腳本執行權限
+# Set execution permission for the script
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# 設定環境變數
+# Set environment variables
 ENV MIX_HOME=/opt/mix
 ENV HEX_HOME=/opt/hex
 
-# 設定入口點
+# Configure entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -31,39 +31,39 @@ if [ "$HAS_PHOENIX" = true ]; then
   mix archive.install --force hex phx_new $PHOENIX_VERSION
 fi
 
-echo "初始化完成，準備執行命令: $@"
+echo "Initialization complete, preparing to execute command: $@"
 
-# 在必要時創建 .tool-versions 檔案
+# Create .tool-versions file when necessary
 if [ -n "$ERLANG_VERSION" ] || [ -n "$ELIXIR_VERSION" ]; then
-  echo "創建 .tool-versions 檔案以記錄使用的版本..."
-  # 直接使用固定版本避免錯誤
+  echo "Creating .tool-versions file to record used versions..."
+  # Use fixed versions to avoid errors
   CURRENT_ERLANG="27.3.3"
   CURRENT_ELIXIR="1.18.3"
   echo "erlang $CURRENT_ERLANG" > .tool-versions
   echo "elixir $CURRENT_ELIXIR" >> .tool-versions
-  echo "已創建 .tool-versions 檔案並記錄版本: Erlang $CURRENT_ERLANG, Elixir $CURRENT_ELIXIR"
+  echo "Created .tool-versions file with versions: Erlang $CURRENT_ERLANG, Elixir $CURRENT_ELIXIR"
 fi
 
-# 檢查是否有命令要運行
+# Check if there are commands to run
 if [ "$#" -eq 0 ]; then
-  echo "未提供命令，啟動 bash shell"
-  # 如果沒有提供命令，則啟動 bash shell
+  echo "No command provided, starting bash shell"
+  # If no command is provided, start a bash shell
   exec bash
 fi
 
-# 特殊命令處理
+# Special command handling
 if [ "$WATCHDOG_ENABLED" = true ] && [ "$1" = "mix" ] && [ "$2" = "phx.server" ]; then
-  echo "啟用實時代碼重載..."
+  echo "Enabling live code reload..."
   exec mix phx.server
 fi
 
-# 特殊處理 phx.new 命令
+# Special handling for phx.new command
 if [ "$1" = "phx.new" ]; then
-  echo "使用 mix phx.new 來創建新專案"
+  echo "Using mix phx.new to create a new project"
   shift
   exec mix phx.new "$@"
 fi
 
-# 執行傳入的命令
-echo "執行命令: $@"
+# Execute the passed command
+echo "Executing command: $@"
 exec "$@"

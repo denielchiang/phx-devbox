@@ -509,21 +509,41 @@ if [[ "$1" == "new" ]]; then
         exit 1
     fi
 
-    # Execute mix phx.new command
+    # Create temporary directory for project creation
     echo "Creating new Phoenix application '$APP_NAME'..."
-    
-    # Use safe docker-compose handling - only pass filtered parameters
+    TMP_DIR=$(mktemp -d)
+    echo "Using temporary directory: $TMP_DIR"
+
+    # Use safe docker-compose with temporary directory for cleaner project creation
     echo "Initialization complete, preparing to execute command: bash -c echo Y | mix phx.new $APP_NAME ${CUSTOM_PARAMS[*]}"
-    run_with_safe_compose run --rm -t -v "$PROJECT_PATH:/app" phoenix bash -c "echo Y | mix phx.new $APP_NAME ${CUSTOM_PARAMS[*]}"
+    run_with_safe_compose run --rm -t -v "$TMP_DIR:/app" phoenix bash -c "echo Y | mix phx.new $APP_NAME ${CUSTOM_PARAMS[*]}"
     
     # Check if command executed successfully
     if [ $? -ne 0 ]; then
         echo "Error: Unable to create Phoenix project, possibly due to Docker mount issues."
-        echo "Please ensure the current directory ($PROJECT_PATH) is shared with Docker."
-        echo "You can configure shared paths in Docker Desktop -> Preferences... -> Resources -> File Sharing."
-        echo "See https://docs.docker.com/desktop/settings/mac/#file-sharing for details."
+        rm -rf "$TMP_DIR"
         exit 1
     fi
+
+    # Check if project directory exists in temporary directory
+    if [ ! -d "$TMP_DIR/$APP_NAME" ]; then
+        echo "Error: Project directory '$APP_NAME' not found in temporary directory."
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+
+    # Ensure the target directory doesn't exist already
+    if [ -d "$PROJECT_PATH/$APP_NAME" ]; then
+        echo "Error: Directory '$PROJECT_PATH/$APP_NAME' already exists."
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+
+    # Copy only the project directory to the target path
+    echo "Copying project from temporary directory to $PROJECT_PATH/$APP_NAME..."
+    mkdir -p "$PROJECT_PATH"
+    cp -R "$TMP_DIR/$APP_NAME" "$PROJECT_PATH/"
+    rm -rf "$TMP_DIR"
 
     # Keep the project files in the app_name directory structure
     echo "Project files are organized under $PROJECT_PATH/$APP_NAME/"
