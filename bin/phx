@@ -310,9 +310,38 @@ find_project_dir() {
 # Run command with safe docker-compose configuration
 run_with_safe_compose() {
     local command_args=("$@")
+    local has_work_dir=false
+    local work_dir="/app"
+    
+    # Check if -w option is present in the command
+    for (( i=0; i<${#command_args[@]}; i++ )); do
+        if [[ "${command_args[$i]}" == "-w" ]]; then
+            has_work_dir=true
+            # Get the working directory value (next argument)
+            if [[ $((i+1)) -lt ${#command_args[@]} ]]; then
+                work_dir="${command_args[$i+1]}"
+            fi
+            break
+        fi
+    done
     
     # Prepare safe docker-compose.yml
     local tmp_dir=$(prepare_docker_compose)
+    
+    # Create a modified docker-compose file for project-specific commands
+    if [[ "$has_work_dir" == "true" && "$work_dir" != "/app" ]]; then
+        # Project is in a subdirectory, adjust volume paths
+        # Extract project_name from work_dir (/app/project_name)
+        local project_name=$(basename "$work_dir")
+        
+        # Modify volume paths in docker-compose.yml
+        echo "Adjusting volume paths for project in subdirectory: $project_name"
+        sed -i.bak -e "s|- mix_deps:/app/deps|- mix_deps:$work_dir/deps|g" \
+                  -e "s|- build_cache:/app/_build|- build_cache:$work_dir/_build|g" \
+                  "$tmp_dir/docker-compose.yml"
+        # Remove backup file
+        rm -f "$tmp_dir/docker-compose.yml.bak"
+    fi
     
     # Run command
     $docker_compose_cmd -f "$tmp_dir/docker-compose.yml" "${command_args[@]}"
