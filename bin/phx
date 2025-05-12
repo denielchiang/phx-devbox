@@ -231,6 +231,43 @@ prepare_docker_compose() {
     echo "$tmp_dir"
 }
 
+# Find the project directory and set the correct working directory
+find_project_dir() {
+    # Default to /app (root of the mounted volume)
+    CONTAINER_WORK_DIR="/app"
+    
+    # Check if we're in a Phoenix project
+    if [ -f "$PROJECT_PATH/mix.exs" ]; then
+        # This is already a Phoenix project root
+        CONTAINER_WORK_DIR="/app"
+        echo "Detected Phoenix project in current directory"
+    else
+        # Check for a single subdirectory that looks like a Phoenix project
+        local phoenix_dirs=()
+        for dir in "$PROJECT_PATH"/*; do
+            if [ -d "$dir" ] && [ -f "$dir/mix.exs" ]; then
+                phoenix_dirs+=("$dir")
+            fi
+        done
+        
+        if [ ${#phoenix_dirs[@]} -eq 1 ]; then
+            # We found exactly one Phoenix project subdirectory
+            local project_name=$(basename "${phoenix_dirs[0]}")
+            CONTAINER_WORK_DIR="/app/$project_name"
+            echo "Detected Phoenix project in subdirectory: $project_name"
+        elif [ ${#phoenix_dirs[@]} -gt 1 ]; then
+            # Multiple Phoenix projects found
+            echo "Multiple Phoenix projects detected. Please specify which project to use with -p flag."
+            exit 1
+        else
+            # No Phoenix project found
+            echo "No Phoenix project detected. Make sure you're in a Phoenix project directory."
+            echo "If this is a new project, run 'phx new [app_name]' first."
+            exit 1
+        fi
+    fi
+}
+
 # Run command with safe docker-compose configuration
 run_with_safe_compose() {
     local command_args=("$@")
@@ -587,25 +624,43 @@ else
     # Determine if we can use the project directory directly
     # If a default path is provided, it will be mapped to /app in the container
     if [[ "$1" == "bash" ]]; then
+        # Detect project directory structure for bash
+        find_project_dir
+        
         # Enter container bash directly
-        run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w /app phoenix bash
+        run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" phoenix bash
     elif [[ "$1" == "iex" ]] && [[ "$#" == 1 ]]; then
+        # Detect project directory structure for iex
+        find_project_dir
+        
         # Start IEx shell
-        run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w /app phoenix iex
+        run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" phoenix iex
     elif [[ "$1" == "iex.phx" ]] || [[ "$1" == "iex:phx" ]]; then
+        # Detect project directory structure for iex.phx
+        find_project_dir
+        
         # Start IEx and load Phoenix application
-        run_with_safe_compose run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix iex -S mix phx.server
+        run_with_safe_compose run --rm --service-ports -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix iex -S mix phx.server
     else
         # Check if it's an iex command
         if [[ "$1" == "iex" ]] && [[ "$#" -gt 1 ]]; then
+            # Detect project directory structure for iex with params
+            find_project_dir
+            
             # Execute iex directly but preserve additional options
-            run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w /app phoenix "$@"
+            run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" phoenix "$@"
         elif [[ "$1" == "phx.server" ]]; then
+            # Detect project directory structure
+            find_project_dir
+            
             # Start Phoenix server
-            run_with_safe_compose run --rm --service-ports -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix phx.server
+            run_with_safe_compose run --rm --service-ports -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix mix phx.server
         else
+            # Detect project directory structure
+            find_project_dir
+            
             # Execute all other mix commands
-            run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w /app -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
+            run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
         fi
     fi
 fi
