@@ -215,19 +215,40 @@ check_versions_availability() {
 }
 
 # Prepare docker-compose.yml file to avoid Docker mount issues
+# $1: Working directory inside the container (if different from /app)
 prepare_docker_compose() {
+    local work_dir=${1:-"/app"}
+    
     # Create temporary directory
     local tmp_dir=$(mktemp -d)
     
-    # Copy modified docker-compose.yml to temporary directory
-    # Remove ".:/app" mount to avoid Docker mounting Homebrew directory
-    cat "$SCRIPT_DIR/docker-compose.yml" | sed 's|- \.:/app.*||g' > "$tmp_dir/docker-compose.yml"
+    # Copy docker-compose.yml to temporary directory
+    if [ -f "$DOCKER_COMPOSE_FILE" ]; then
+        cp "$DOCKER_COMPOSE_FILE" "$tmp_dir/docker-compose.yml"
+    else
+        echo "Error: docker-compose.yml not found at $DOCKER_COMPOSE_FILE"
+        exit 1
+    fi
     
-    # Copy Dockerfile and other necessary files
-    cp "$SCRIPT_DIR/Dockerfile" "$tmp_dir/Dockerfile"
-    cp "$SCRIPT_DIR/docker-entrypoint.sh" "$tmp_dir/docker-entrypoint.sh"
+    # If the working directory is not /app (the default), modify volume mappings
+    if [[ "$work_dir" != "/app" ]]; then
+        echo "Customizing docker-compose.yml for project in subdirectory: $(basename "$work_dir")"
+        
+        # On macOS, use sed with slightly different syntax
+        if [[ "$(uname)" == "Darwin" ]]; then
+            # 1. Change the mount point for the deps volume
+            sed -i '' "s|- mix_deps:/app/deps|- mix_deps:$work_dir/deps|g" "$tmp_dir/docker-compose.yml"
+            
+            # 2. Change the mount point for the _build volume
+            sed -i '' "s|- build_cache:/app/_build|- build_cache:$work_dir/_build|g" "$tmp_dir/docker-compose.yml"
+        else
+            # For Linux
+            sed -i "s|- mix_deps:/app/deps|- mix_deps:$work_dir/deps|g" "$tmp_dir/docker-compose.yml"
+            sed -i "s|- build_cache:/app/_build|- build_cache:$work_dir/_build|g" "$tmp_dir/docker-compose.yml"
+        fi
+    fi
     
-    # Return temporary directory path
+    # Return the temporary directory path
     echo "$tmp_dir"
 }
 
@@ -310,13 +331,11 @@ find_project_dir() {
 # Run command with safe docker-compose configuration
 run_with_safe_compose() {
     local command_args=("$@")
-    local has_work_dir=false
     local work_dir="/app"
     
     # Check if -w option is present in the command
     for (( i=0; i<${#command_args[@]}; i++ )); do
         if [[ "${command_args[$i]}" == "-w" ]]; then
-            has_work_dir=true
             # Get the working directory value (next argument)
             if [[ $((i+1)) -lt ${#command_args[@]} ]]; then
                 work_dir="${command_args[$i+1]}"
@@ -325,23 +344,8 @@ run_with_safe_compose() {
         fi
     done
     
-    # Prepare safe docker-compose.yml
-    local tmp_dir=$(prepare_docker_compose)
-    
-    # Create a modified docker-compose file for project-specific commands
-    if [[ "$has_work_dir" == "true" && "$work_dir" != "/app" ]]; then
-        # Project is in a subdirectory, adjust volume paths
-        # Extract project_name from work_dir (/app/project_name)
-        local project_name=$(basename "$work_dir")
-        
-        # Modify volume paths in docker-compose.yml
-        echo "Adjusting volume paths for project in subdirectory: $project_name"
-        sed -i.bak -e "s|- mix_deps:/app/deps|- mix_deps:$work_dir/deps|g" \
-                  -e "s|- build_cache:/app/_build|- build_cache:$work_dir/_build|g" \
-                  "$tmp_dir/docker-compose.yml"
-        # Remove backup file
-        rm -f "$tmp_dir/docker-compose.yml.bak"
-    fi
+    # Prepare safe docker-compose.yml with correct working directory
+    local tmp_dir=$(prepare_docker_compose "$work_dir")
     
     # Run command
     $docker_compose_cmd -f "$tmp_dir/docker-compose.yml" "${command_args[@]}"
@@ -523,8 +527,9 @@ FOUND_CONFIG=false
 for path in "${CONFIG_PATHS[@]}"; do
     if [[ -f "$path/docker-compose.yml" ]]; then
         SCRIPT_DIR="$path"
+        DOCKER_COMPOSE_FILE="$path/docker-compose.yml"
         FOUND_CONFIG=true
-        echo "Found configuration file: $SCRIPT_DIR/docker-compose.yml"
+        echo "Found configuration file: $DOCKER_COMPOSE_FILE"
         break
     fi
 done
@@ -727,8 +732,27 @@ else
             # Detect project directory structure
             find_project_dir
             
-            # Execute all other mix commands
-            run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
+            # Special handling for deps.get command
+            if [[ "$1" == "deps.get" ]]; then
+                echo "Running deps.get with special volume handling..."
+                
+                # First ensure the deps directory exists locally
+                PROJECT_ROOT="$PROJECT_PATH"
+                if [[ "$CONTAINER_WORK_DIR" != "/app" ]]; then
+                    # Extract project name from container working directory
+                    PROJECT_NAME=$(basename "$CONTAINER_WORK_DIR")
+                    PROJECT_ROOT="$PROJECT_PATH/$PROJECT_NAME"
+                fi
+                
+                # Create deps and _build directories locally with proper permissions
+                mkdir -p "$PROJECT_ROOT/deps" "$PROJECT_ROOT/_build"
+                
+                # Now run the deps.get command
+                run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix bash -c "mkdir -p ./deps && mix deps.get"
+            else
+                # Execute all other mix commands
+                run_with_safe_compose run --rm -v "$PROJECT_PATH:/app" -w "$CONTAINER_WORK_DIR" -e DATABASE_HOST=host.docker.internal phoenix mix "$@"
+            fi
         fi
     fi
 fi
